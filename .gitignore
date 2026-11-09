@@ -1,0 +1,11 @@
+# secrets and runtime state
+.env
+data/
+client_secret*.json
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/

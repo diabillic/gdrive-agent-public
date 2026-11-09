@@ -1,0 +1,5 @@
+*
+!requirements.txt
+!gdrive_agent/
+**/__pycache__
+**/*.pyc
