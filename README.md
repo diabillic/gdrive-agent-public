@@ -7,6 +7,8 @@ Watches a Google account's storage. Once a day it posts a report to Discord with
 - **The trash:** its size and how many items are in it.
 - **Changes:** how many files and folders were added or changed since the last report, how many of them are
   new, how many went to the trash, and how many were deleted for good.
+- **The largest files:** the `TOP_FILES` (default 10) files you own that take the most space, outside the
+  trash, each with its folder.
 
 When usage goes over `USAGE_PERCENT` (default 75%) and the trash isn't empty, the agent asks your assistant to
 empty the trash. You decide with the assistant's **Allow / Deny** buttons on Discord. The agent never empties
@@ -32,6 +34,11 @@ Since Sat 07 Nov 08:00:
 1,312 files added or changed (57 new)
 14 folders added or changed (3 new)
 40 items moved to the trash
+
+📦 Largest 10 files
+75.2 GB · `appdata.tar.zst` · in `Backups/appdata/2026-11-01`
+64.1 GB · `appdata.tar.zst` · in `Backups/appdata/2026-10-25`
+…
 
 ⚠️ Over the limit
 Storage is over the 75% limit. Emptying the trash would free about 2.3 GB; the assistant will ask you to Allow or Deny it.
@@ -91,8 +98,8 @@ up.
 
 The agent uses your own OAuth client, signed in once as you. The trash call needs the full Drive scope
 (`https://www.googleapis.com/auth/drive`): Google has no narrower scope that allows it. The agent makes only
-the calls in `gdrive_agent/drive.py`: the storage quota, the change feed, a count of trashed items, and emptying
-the trash.
+the calls in `gdrive_agent/drive.py`: the storage quota, the change feed, a count of trashed items, the
+largest files and their folders' names, and emptying the trash.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Google Drive
    API**.
@@ -143,4 +150,4 @@ settings in `.env.example`. State (the change-feed position, the last report, un
 | variable | `BUS_HOST_PORT` | Host port for the bus |
 | variable | `ASSISTANT_USER_ID` | The assistant's Discord user ID |
 | variable | `APPROVAL_MODE` | `client` (the assistant's buttons) or `code` |
-| variable | `REPORT_HOUR`, `USAGE_PERCENT`, `AGENT_BUS_PORT` | Optional; see `.env.example` |
+| variable | `REPORT_HOUR`, `USAGE_PERCENT`, `TOP_FILES`, `AGENT_BUS_PORT` | Optional; see `.env.example` |

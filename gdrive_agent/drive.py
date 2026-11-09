@@ -20,6 +20,7 @@ API = "https://www.googleapis.com/drive/v3"
 FOLDER = "application/vnd.google-apps.folder"
 TIMEOUT = 30
 MAX_PAGES = 200  # 1000 items a page: enough for any day's changes or any trash
+MAX_DEPTH = 30  # folder levels shown in a path
 
 
 class DriveError(Exception):
@@ -179,6 +180,32 @@ class Drive:
             if not page:
                 return total
         return None
+
+    def largest(self, n: int) -> list[dict]:
+        """The n files you own that take the most space, outside the trash, each with its folder path."""
+        body = self._call("GET", "/files", {
+            "q": "trashed = false and 'me' in owners", "orderBy": "quotaBytesUsed desc", "pageSize": n,
+            "spaces": "drive", "fields": "files(id,name,quotaBytesUsed,parents)"})
+        folders: dict[str, tuple[str, list[str]]] = {}  # id -> (name, parents), shared by every path
+        return [{"name": f.get("name", ""), "size": int(f.get("quotaBytesUsed") or 0),
+                 "path": self._path(f.get("parents") or [], folders)} for f in body.get("files", [])]
+
+    def _path(self, parents: list[str], folders: dict) -> str:
+        """Folder names from the top down, without My Drive itself."""
+        names, seen = [], set()
+        while parents and parents[0] not in seen and len(names) < MAX_DEPTH:
+            fid = parents[0]
+            seen.add(fid)
+            if fid not in folders:
+                try:
+                    f = self._call("GET", f"/files/{fid}", {"fields": "name,parents"})
+                except DriveError:  # a folder we can't see, e.g. someone else's
+                    break
+                folders[fid] = (f.get("name", ""), f.get("parents") or [])
+            name, parents = folders[fid]
+            if parents:  # the root (My Drive) is the only folder without a parent
+                names.append(name)
+        return "/".join(reversed(names))
 
     # --- The one change ---
 

@@ -52,6 +52,7 @@ jobs:
         env:
           REPORT_HOUR: ${{ vars.REPORT_HOUR }}
           USAGE_PERCENT: ${{ vars.USAGE_PERCENT }}
+          TOP_FILES: ${{ vars.TOP_FILES }}
           ASSISTANT_USER_ID: ${{ vars.ASSISTANT_USER_ID }}
           AGENT_BUS_PORT: ${{ vars.AGENT_BUS_PORT }}
           APPROVAL_MODE: ${{ vars.APPROVAL_MODE }}
@@ -70,7 +71,7 @@ jobs:
           mkdir -p stage/context
           cp -r gdrive_agent requirements.txt Dockerfile .dockerignore stage/context/
           (umask 077; : > stage/agent.env)
-          for v in REPORT_HOUR USAGE_PERCENT ASSISTANT_USER_ID AGENT_BUS_PORT APPROVAL_MODE GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN NOTIFY_URLS ASSISTANT_URL AGENT_BUS_TOKEN APPROVAL_NOTIFY_URLS; do
+          for v in REPORT_HOUR USAGE_PERCENT TOP_FILES ASSISTANT_USER_ID AGENT_BUS_PORT APPROVAL_MODE GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN NOTIFY_URLS ASSISTANT_URL AGENT_BUS_TOKEN APPROVAL_NOTIFY_URLS; do
             if [ -n "${!v}" ]; then printf '%s=%s\n' "$v" "${!v}" >> stage/agent.env; fi
           done
           publish=""

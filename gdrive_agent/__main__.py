@@ -55,6 +55,16 @@ def usage_line(q: Quota) -> str:
     return f"{size(q.usage)} of {size(q.limit)} used (**{q.percent:.0f}%**)"
 
 
+def code(text: str) -> str:
+    """Inline code, so names with * or _ show as they are."""
+    return "`" + text.replace("`", "'") + "`"
+
+
+def largest_lines(files: list[dict]) -> list[str]:
+    return [f"**{size(f['size'])}** · {code(f['name'])}" + (f" · in {code(f['path'])}" if f["path"] else " · in My Drive")
+            for f in files]
+
+
 def change_lines(c: Changes, since: str) -> list[str]:
     lines = [f"Since {local_time(since)}:"] if since else []
     if not c.total:
@@ -153,6 +163,11 @@ class Agent:
             ["Counting starts now: the next report has the first numbers."]
         sections = [Section("💾 Storage", storage, bullets=False), Section("🗑️ Trash", trash, bullets=False),
                     Section("📝 Changes", changed, bullets=False)]
+        top = self.largest()
+        if top is not None:
+            sections.append(Section(f"📦 Largest {len(top)} files", largest_lines(top) or ["No files."], bullets=False))
+        elif self.cfg.top_files:
+            sections.append(Section("📦 Largest files", ["Couldn't list them today."], bullets=False))
         over = self.over(q)
         ask = over and q.trash > 0
         if over:
@@ -177,7 +192,8 @@ class Agent:
             changes=None if changes is None else {k: getattr(changes, k) for k in
                                                   ("files", "new_files", "folders", "new_folders", "trashed",
                                                    "removed", "complete")},
-            changes_since=since or None)
+            changes_since=since or None,
+            largest=None if top is None else [{**f, "size": size(f["size"])} for f in top])
         self.state.save()
         self.flush()
         today = datetime.fromtimestamp(now).date().isoformat()
@@ -210,6 +226,16 @@ class Agent:
             log.warning("The assistant's webhook refused the message: HTTP %s", r.status_code)
         return r.ok
 
+    def largest(self) -> list[dict] | None:
+        """The report goes out without the list rather than not at all if this fails."""
+        if not self.cfg.top_files:
+            return None
+        try:
+            return self.drive.largest(self.cfg.top_files)
+        except DriveError as exc:
+            log.warning("Can't list the largest files: %s", exc)
+            return None
+
     # --- Bus tools ---
 
     def status(self) -> dict:
@@ -241,7 +267,7 @@ class Agent:
     def tools(self) -> list[BusTool]:
         return self.runtime.common_tools(check_is_destructive=False) + [
             BusTool("drive_status", "Google Drive: storage used and its limit, the trash size, and the last daily "
-                    "report (with how many files and folders changed).", schema(), self.status),
+                    "report (with how many files and folders changed, and the largest files).", schema(), self.status),
             BusTool("drive_empty_trash", "Google Drive: permanently delete everything in the trash to free space. "
                     "Can't be undone. Takes no arguments.", schema(), self.empty_trash, read_only=False),
         ]
@@ -295,11 +321,13 @@ class Agent:
             self.runtime.wake.wait(TICK)
 
 
-def show(drive: Drive, state: State) -> None:
+def show(drive: Drive, state: State, top: int) -> None:
     """Changes nothing: prints today's numbers, and the changes since the last report."""
     q = drive.quota()
     print(usage_line(q).replace("**", ""))
     print(f"Drive {size(q.drive)}, trash {size(q.trash)} in {drive.trash_items()} items")
+    for f in drive.largest(top) if top else []:
+        print(f"{size(f['size']):>10}  {f['name']}  (in {f['path'] or 'My Drive'})")
     run = state["run"]
     if run.get("token"):
         print("\n".join(change_lines(drive.changes(run["token"], run.get("token_at", "")), run.get("token_at", ""))))
@@ -314,7 +342,7 @@ def main() -> None:
     drive = Drive(cfg.client_id, cfg.client_secret, cfg.refresh_token)
     state = State(cfg.state_path)
     if sys.argv[1:] == ["check"]:
-        show(drive, state)
+        show(drive, state, cfg.top_files)
         return
     health.reset()
     runtime = Runtime("gdrive", revision=_revision())

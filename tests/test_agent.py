@@ -23,6 +23,8 @@ class FakeDrive:
     def __init__(self, usage=5 * GB, limit=15 * GB, trash=1 * GB, items=10):
         self.q = Quota(limit, usage, usage - GB // 2, trash)
         self.items, self.changed, self.emptied, self.fail, self.tokens = items, Changes(), 0, None, 0
+        self.top, self.top_fail = [{"name": "big_*file*.iso", "size": 40 * GB, "path": "Backups/2026"},
+                                   {"name": "loose.bin", "size": GB, "path": ""}], None
 
     def quota(self):
         if self.fail:
@@ -42,6 +44,11 @@ class FakeDrive:
                                                               "trashed", "removed", "complete")})
         out.token = token + "+"
         return out
+
+    def largest(self, n):
+        if self.top_fail:
+            raise self.top_fail
+        return self.top[:n]
 
     def empty_trash(self):
         self.emptied += 1
@@ -297,6 +304,46 @@ def test_run_now_file(tmp_path):
     open(agent.cfg.run_now_path, "w").close()
     agent.tick(ts("2026-11-07T10:00"))
     assert len(agent.outbox.sent) == 1
+
+
+def test_report_lists_the_largest_files_with_their_folders(tmp_path):
+    agent, _ = make(tmp_path)
+    agent.report(ts("2026-11-07T08:00"))
+    body = text(agent.outbox.sent[0])
+    assert "📦 Largest 2 files" in body
+    assert "**40.0 GB** · `big_*file*.iso` · in `Backups/2026`" in body
+    assert "**1.0 GB** · `loose.bin` · in My Drive" in body
+    assert agent.state["report"]["largest"][0] == {"name": "big_*file*.iso", "size": "40.0 GB", "path": "Backups/2026"}
+
+
+def test_report_still_goes_out_when_the_largest_files_cant_be_listed(tmp_path):
+    agent, _ = make(tmp_path)
+    agent.drive.top_fail = DriveError("HTTP 500")
+    agent.report(ts("2026-11-07T08:00"))
+    assert "Couldn't list them today." in text(agent.outbox.sent[0])
+
+
+def test_top_files_zero_leaves_the_list_out(tmp_path):
+    agent, _ = make(tmp_path)
+    agent.cfg.top_files = 0
+    agent.report(ts("2026-11-07T08:00"))
+    assert "Largest" not in text(agent.outbox.sent[0])
+
+
+def test_drive_largest_builds_paths_once_per_folder():
+    s = FakeSession(Resp(200, {"access_token": "a"}), [
+        Resp(200, {"files": [{"id": "1", "name": "a.tar", "quotaBytesUsed": str(3 * GB), "parents": ["d2"]},
+                             {"id": "2", "name": "b.tar", "quotaBytesUsed": str(2 * GB), "parents": ["d2"]},
+                             {"id": "3", "name": "c.txt", "quotaBytesUsed": "5", "parents": ["root"]}]}),
+        Resp(200, {"name": "2026", "parents": ["d1"]}),
+        Resp(200, {"name": "Backups", "parents": ["root"]}),
+        Resp(200, {"name": "My Drive"}),
+    ])
+    out = Drive("id", "secret", "refresh", s).largest(10)
+    assert [(f["name"], f["size"], f["path"]) for f in out] == [
+        ("a.tar", 3 * GB, "Backups/2026"), ("b.tar", 2 * GB, "Backups/2026"), ("c.txt", 5, "")]
+    assert s.requests[0][2]["orderBy"] == "quotaBytesUsed desc"
+    assert len(s.requests) == 4  # one list, then each folder once
 
 
 # --- Bus tools ---

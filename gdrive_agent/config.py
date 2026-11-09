@@ -30,6 +30,7 @@ class Config:
 
     report_hour: int = 8  # the daily report, in the container's time zone
     usage_percent: int = 75  # over this share of the quota, ask to empty the trash
+    top_files: int = 10  # the largest files listed in the report; 0 leaves the list out
 
     # Where to ask the assistant to empty the trash: a Discord webhook in a channel it reads, and
     # its Discord user ID so the message mentions it. Without both, the report just says to ask.
@@ -68,6 +69,9 @@ class Config:
         percent = _int("USAGE_PERCENT", 75)
         if not 1 <= percent <= 100:
             raise SystemExit(f"USAGE_PERCENT must be from 1 to 100, got {percent}")
+        top = _int("TOP_FILES", 10)
+        if not 0 <= top <= 50:
+            raise SystemExit(f"TOP_FILES must be from 0 to 50, got {top}")
         assistant_url = os.environ.get("ASSISTANT_URL", "").strip()
         assistant_id = os.environ.get("ASSISTANT_USER_ID", "").strip()
         if bool(assistant_url) != bool(assistant_id):
@@ -81,6 +85,7 @@ class Config:
             notify_urls=notify,
             report_hour=hour,
             usage_percent=percent,
+            top_files=top,
             assistant_url=assistant_url,
             assistant_user_id=assistant_id,
             bus_token=os.environ.get("AGENT_BUS_TOKEN", "").strip(),
