@@ -165,6 +165,16 @@ def test_drive_pages_through_changes_and_keeps_the_new_start_token():
     assert [r[2]["pageToken"] for r in s.requests] == ["start", "p2"]
 
 
+def test_drive_stops_paging_changes_at_the_limit_and_resumes_there(monkeypatch):
+    monkeypatch.setattr(drive_mod, "MAX_CHANGE_PAGES", 2)
+    s = FakeSession(Resp(200, {"access_token": "a"}), [
+        Resp(200, {"changes": [change("a", removed=True)], "nextPageToken": "p2"}),
+        Resp(200, {"changes": [change("b", removed=True)], "nextPageToken": "p3"}),
+    ])
+    out = Drive("id", "secret", "refresh", s).changes("start", "")
+    assert (out.removed, out.token, out.complete) == (2, "p3", False)
+
+
 def test_drive_reports_a_revoked_token_as_auth_rejected():
     s = FakeSession(Resp(400, {"error": "invalid_grant"}), [])
     with pytest.raises(AuthRejected):

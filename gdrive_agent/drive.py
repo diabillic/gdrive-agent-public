@@ -21,6 +21,9 @@ FOLDER = "application/vnd.google-apps.folder"
 TIMEOUT = 30
 MAX_PAGES = 200  # 1000 items a page: enough for any day's changes or any trash
 MAX_DEPTH = 30  # folder levels shown in a path
+# Google sends the change feed ~50 records a page whatever pageSize asks for: this covers 250,000 changes,
+# e.g. the deletions from emptying a big trash, in one report.
+MAX_CHANGE_PAGES = 5000
 
 
 class DriveError(Exception):
@@ -148,7 +151,7 @@ class Drive:
     def changes(self, token: str, since: str) -> Changes:
         """Every change after `token`, counted; the result's token is where tomorrow starts."""
         records, page = [], token
-        for _ in range(MAX_PAGES):
+        for _ in range(MAX_CHANGE_PAGES):
             body = self._call("GET", "/changes", {
                 "pageToken": page, "pageSize": 1000, "includeRemoved": "true", "spaces": "drive",
                 "fields": "nextPageToken,newStartPageToken,"
